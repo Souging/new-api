@@ -175,6 +175,10 @@ func AddToken(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
+	if token.RpmLimit < 0 {
+		common.ApiError(c, fmt.Errorf("rpm_limit 不能小于 0"))
+		return
+	}
 	// 非无限额度时，检查额度值是否超出有效范围
 	if !token.UnlimitedQuota {
 		if token.RemainQuota < 0 {
@@ -221,6 +225,7 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
+		RpmLimit:           token.RpmLimit,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -258,6 +263,10 @@ func UpdateToken(c *gin.Context) {
 	}
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
+		return
+	}
+	if token.RpmLimit < 0 {
+		common.ApiError(c, fmt.Errorf("rpm_limit 不能小于 0"))
 		return
 	}
 	if !token.UnlimitedQuota {
@@ -299,6 +308,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.RpmLimit = token.RpmLimit
 	}
 	err = cleanToken.Update()
 	if err != nil {
