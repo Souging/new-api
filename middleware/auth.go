@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -365,8 +367,58 @@ func TokenAuth() func(c *gin.Context) {
 		if err != nil {
 			return
 		}
+
+		if err = checkTokenRPMLimit(c, token); err != nil {
+			abortWithOpenAiMessage(c, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		c.Next()
 	}
+}
+
+func checkTokenRPMLimit(c *gin.Context, token *model.Token) error {
+	if token == nil || token.RpmLimit <= 0 {
+		return nil
+	}
+	key := fmt.Sprintf("rateLimit:TOKEN_RPM:%d", token.Id)
+	const durationSeconds int64 = 60
+
+	if common.RedisEnabled {
+		ctx := context.Background()
+		rdb := common.RDB
+		listLength, err := rdb.LLen(ctx, key).Result()
+		if err != nil {
+			return fmt.Errorf("令牌限流检查失败")
+		}
+		if listLength < int64(token.RpmLimit) {
+			rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
+			return nil
+		}
+		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
+		oldTime, err := time.Parse(timeFormat, oldTimeStr)
+		if err != nil {
+			return fmt.Errorf("令牌限流检查失败")
+		}
+		nowTime, err := time.Parse(timeFormat, time.Now().Format(timeFormat))
+		if err != nil {
+			return fmt.Errorf("令牌限流检查失败")
+		}
+		if int64(nowTime.Sub(oldTime).Seconds()) < durationSeconds {
+			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
+			return fmt.Errorf("当前令牌已达到 RPM 限制（每分钟最多 %d 次请求）", token.RpmLimit)
+		}
+		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+		rdb.LTrim(ctx, key, 0, int64(token.RpmLimit-1))
+		rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
+		return nil
+	}
+
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	if !inMemoryRateLimiter.Request(key, token.RpmLimit, durationSeconds) {
+		return fmt.Errorf("当前令牌已达到 RPM 限制（每分钟最多 %d 次请求）", token.RpmLimit)
+	}
+	return nil
 }
 
 func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) error {

@@ -74,6 +74,7 @@ const EditTokenModal = (props) => {
     allow_ips: '',
     group: '',
     cross_group_retry: false,
+    rpm_limit: 0,
     tokenCount: 1,
   });
 
@@ -210,6 +211,7 @@ const EditTokenModal = (props) => {
     if (isEdit) {
       let { tokenCount: _tc, ...localInputs } = values;
       localInputs.remain_quota = parseInt(localInputs.remain_quota);
+      localInputs.rpm_limit = parseInt(localInputs.rpm_limit, 10) || 0;
       if (localInputs.expired_time !== -1) {
         let time = Date.parse(localInputs.expired_time);
         if (isNaN(time)) {
@@ -246,6 +248,7 @@ const EditTokenModal = (props) => {
           localInputs.name = baseName;
         }
         localInputs.remain_quota = parseInt(localInputs.remain_quota);
+        localInputs.rpm_limit = parseInt(localInputs.rpm_limit, 10) || 0;
 
         if (localInputs.expired_time !== -1) {
           let time = Date.parse(localInputs.expired_time);
@@ -556,6 +559,16 @@ const EditTokenModal = (props) => {
                       autoClearSearchValue={false}
                       searchPosition='dropdown'
                       showClear
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Form.InputNumber
+                      field='rpm_limit'
+                      label={t('RPM限制')}
+                      min={0}
+                      placeholder={t('每分钟请求上限，0表示不限制')}
+                      extraText={t('用于限制该令牌每分钟的请求次数（RPM）')}
                       style={{ width: '100%' }}
                     />
                   </Col>
